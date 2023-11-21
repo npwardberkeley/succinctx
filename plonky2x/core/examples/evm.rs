@@ -82,4 +82,16 @@ mod tests {
             WrappedCircuit::<L, Groth16WrapperParameters, D>::build(circuit);
         let wrapped_proof = wrapper.prove(&proof).unwrap();
     }
+
+    #[test]
+    fn test_wrap_with_groth16() {
+        let args = ProveArgs {
+            input_json: "examples/evm.json".to_string(),
+            build_dir: "build".to_string(),
+            wrapper_path: "verifier-build".to_string(),
+        };
+
+        let request = ProofRequest::<L, D>::load(&args.input_json);
+        SimpleAdditionCircuit::prove::<L, Groth16WrapperParameters, D>(args, request);
+    }
 }
