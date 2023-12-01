@@ -2981,6 +2981,7 @@ dependencies = [
  "dotenv",
  "ed25519-dalek",
  "env_logger 0.10.1",
+ "ethereum-types",
  "ethers",
  "ff",
  "futures",

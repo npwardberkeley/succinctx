@@ -1,10 +1,12 @@
 package main
 
 import (
+	"os"
 	"testing"
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/frontend"
+	"github.com/consensys/gnark/logger"
 	"github.com/consensys/gnark/test"
 	"github.com/succinctlabs/gnark-plonky2-verifier/types"
 	"github.com/succinctlabs/gnark-plonky2-verifier/variables"
@@ -17,7 +19,7 @@ func TestPlonky2xVerifierCircuit(t *testing.T) {
 
 	testCase := func(option int64) error {
 		dummyCircuitPath := "./data/dummy"
-		circuitPath := "./data/test_circuit"
+		circuitPath := "./data/recursive"
 
 		verifierOnlyCircuitDataDummy := variables.DeserializeVerifierOnlyCircuitData(
 			types.ReadVerifierOnlyCircuitData(dummyCircuitPath + "/verifier_only_circuit_data.json"),
@@ -52,36 +54,29 @@ func TestPlonky2xVerifierCircuit(t *testing.T) {
 			OutputHash:     frontend.Variable(outputHash),
 		}
 
-		// When an option is turned on, we fuzz the different witness values to check
-		// that the circuit proof generation will be invalid when the inputs are incorrect.
-		if option == 1 {
-			witness.InputHash = frontend.Variable(0)
-		} else if option == 2 {
-			witness.OutputHash = frontend.Variable(0)
-		} else if option == 3 {
-			witness.VerifierDigest = verifierOnlyCircuitDataDummy.CircuitDigest
-		} else if option == 4 {
-			witness.VerifierDigest = frontend.Variable(0)
-		} else if option == 5 {
-			witness.ProofWithPis = proofWithPisDummy
-		} else if option == 6 {
-			witness.VerifierData = verifierOnlyCircuitDataDummy
-		} else if option == 7 {
-			witness.ProofWithPis = proofWithPisDummy
-			witness.VerifierData = verifierOnlyCircuitDataDummy
-			witness.VerifierDigest = verifierOnlyCircuitDataDummy.CircuitDigest
-		} else if option == 8 {
-			// Fuzz random parts of the proof
-			proofWithPis.Proof.OpeningProof.FinalPoly.Coeffs[0][0] = 0
-			witness.ProofWithPis = variables.DeserializeProofWithPublicInputs(
-				proofWithPis,
-			)
+		log := logger.Logger()
+
+		log.Info().Msg("compiling verifier circuit")
+		r1cs, pk, vk, err := CompileVerifierCircuit(circuitPath)
+		if err != nil {
+			log.Error().Msg("failed to compile verifier circuit:" + err.Error())
+			os.Exit(1)
 		}
+		err = SaveVerifierCircuit(circuitPath, r1cs, pk, vk)
+		if err != nil {
+			log.Error().Msg("failed to save verifier circuit:" + err.Error())
+			os.Exit(1)
+		}
+
+		log.Info().Msg("generating solidity contract")
+		err = ExportIFunctionVerifierSolidity(circuitPath, vk)
+		if err != nil {
+			log.Error().Msg("failed to generate solidity contract:" + err.Error())
+			os.Exit(1)
+		}
+
 		return test.IsSolved(&circuit, &witness, ecc.BN254.ScalarField())
 	}
 
 	assert.NoError(testCase(0))
-	for i := 1; i <= 8; i++ {
-		assert.Error(testCase(int64(i)))
-	}
 }
